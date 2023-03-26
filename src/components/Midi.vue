@@ -165,9 +165,6 @@ let requestMidiDevices = async (): Promise<void> => {
   inputDeviceNames.value = [];
   outputDeviceNames.value = [];
 
-  console.log("Input devices: ", inputDevices.size);
-  console.log("Output devices: ", outputDevices.size);
-
   for (const input of inputDevices) {
     const [, device] = input;
 
