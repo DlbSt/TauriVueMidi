@@ -107,27 +107,31 @@ let permissionGranted = false;
 
 let dataGridInstance = null;
 
-const dataGridInitialized = (e) => {
+const dataGridInitialized = (e: dxDataGridOptions) => {
   console.log(e);
   console.log(e.component);
+  console.log(typeof e);
   dataGridInstance = e.component;
+  console.log(typeof dataGridInstance);
   dataGridInstance?.refresh();
 };
 
 //https://stackoverflow.com/questions/73834911/webmidi-how-to-call-removelistener
 
-onMounted(async () => {
+onMounted(async () : Promise<void> => {
   permissionGranted = await isPermissionGranted();
 
   await register(
     "CommandOrControl+Shift+R",
-    async () => await requestMidiDevices()
+    async () : Promise<void> => await requestMidiDevices()
   ); //register tauri shortcut
 
   await requestMidiDevices();
 });
 
-const processMidiMessage = (message) => {
+const processMidiMessage = (message): void => {
+  console.log(typeof message);
+
   deviceMessages.value.push({
     data: message.data.toString(),
     device: message.currentTarget.name,
@@ -177,14 +181,6 @@ let requestMidiDevices = async (): Promise<void> => {
         body: device.name,
       });
     }
-
-    console.log(
-      `Input port [type:'${device.type}']` +
-        ` id:'${device.id}'` +
-        ` manufacturer:'${device.manufacturer}'` +
-        ` name:'${device.name}'` +
-        ` version:'${device.version}'`
-    );
   }
 
   for (const output of outputDevices) {
@@ -198,14 +194,6 @@ let requestMidiDevices = async (): Promise<void> => {
         body: device.name,
       });
     }
-
-    console.log(
-      `Output port [type:'${device.type}']` +
-        `id:'${device.id}'` +
-        `manufacturer:'${device.manufacturer}'` +
-        `name:'${device.name}'` +
-        `version:'${device.version}'`
-    );
   }
 };
 </script>
