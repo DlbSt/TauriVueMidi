@@ -3,13 +3,25 @@
     <div class="content-block dx-card responsive-paddings cards">
       <h3 class="content-block cards">Input devices</h3>
       <div class="content-block lists">
-        <DxList :items="inputDeviceNames" :activeStateEnabled="false" :focusStateEnabled="false" :hoverStateEnabled="false" noDataText=" "  />
+        <DxList
+          :items="inputDeviceNames"
+          :activeStateEnabled="false"
+          :focusStateEnabled="false"
+          :hoverStateEnabled="false"
+          noDataText=" "
+        />
       </div>
     </div>
     <div class="content-block dx-card responsive-paddings cards">
       <h3 class="content-block cards">Output devices</h3>
       <div class="content-block lists">
-        <DxList :items="outputDeviceNames" :activeStateEnabled="false" :focusStateEnabled="false" :hoverStateEnabled="false" noDataText=" " />
+        <DxList
+          :items="outputDeviceNames"
+          :activeStateEnabled="false"
+          :focusStateEnabled="false"
+          :hoverStateEnabled="false"
+          noDataText=" "
+        />
       </div>
     </div>
     <div
@@ -17,6 +29,39 @@
       class="content-block dx-card responsive-paddings messagecard"
     >
       <h3 class="content-block cards">Messages</h3>
+      <div class="content-block lists">
+        <DxDataGrid
+          :data-source="deviceMessages"
+          key-expr="timestamp"
+          :column-hiding-enabled="true"
+          noDataText=" "
+          :show-borders="false"
+          style="display: block"
+          @initialized="dataGridInitialized"
+          height="100%"
+        >
+          <DxScrolling row-rendering-mode="virtual" />
+          <DxColumn
+            data-field="device"
+            caption="Device name"
+            data-type="number"
+            alignment="left"
+          />
+          <DxColumn
+            data-field="data"
+            caption="Data"
+            data-type="string"
+            alignment="left"
+          />
+          <DxColumn
+            data-field="timestamp"
+            caption="Timestamp"
+            data-type="datetime"
+            alignment="left"
+            format="dd/MM/yyyy HH:mm:ss"
+          />
+        </DxDataGrid>
+      </div>
     </div>
     <div id="buttonBar">
       <div>
@@ -34,9 +79,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, reactive, resolveDynamicComponent } from "vue";
+import { onMounted, ref } from "vue";
 import DxButton from "devextreme-vue/button";
 import DxList from "devextreme-vue/list";
+import { DxDataGrid, DxColumn, DxScrolling } from "devextreme-vue/data-grid";
 
 import {
   isPermissionGranted,
@@ -45,9 +91,9 @@ import {
 import { register } from "@tauri-apps/api/globalShortcut";
 
 interface MidiMessage {
-  timestamp: Date,
-  device: String,
-  data: String
+  timestamp: Date;
+  device: String;
+  data: String;
 }
 
 let inputDevices: WebMidi.MIDIInputMap;
@@ -59,19 +105,54 @@ let deviceMessages = ref<MidiMessage[]>([]);
 
 let permissionGranted = false;
 
+let dataGridInstance = null;
+
+const dataGridInitialized = (e) => {
+  console.log(e);
+  console.log(e.component);
+  dataGridInstance = e.component;
+  dataGridInstance?.refresh();
+};
+
 //https://stackoverflow.com/questions/73834911/webmidi-how-to-call-removelistener
 
 onMounted(async () => {
   permissionGranted = await isPermissionGranted();
 
-  await register("CommandOrControl+R", () => {
-    console.log("Devices refreshed!");
-  });
+  await register(
+    "CommandOrControl+Shift+R",
+    async () => await requestMidiDevices()
+  ); //register tauri shortcut
 
   await requestMidiDevices();
 });
 
+const processMidiMessage = (message) => {
+  deviceMessages.value.push({
+    data: message.data.toString(),
+    device: message.currentTarget.name,
+    timestamp: new Date(Date.now()),
+  } as MidiMessage);
+
+  console.log(deviceMessages);
+  dataGridInstance?.refresh();
+};
+
 let requestMidiDevices = async (): Promise<void> => {
+  //necessary initialization, when refreshing
+  if (deviceMessages?.value?.length > 0) {
+    deviceMessages.value = [];
+    dataGridInstance?.refresh();
+  }
+
+  if (inputDevices) {
+    for (const input of inputDevices) {
+      const [, device] = input;
+
+      device.removeEventListener("midimessage", processMidiMessage);
+    }
+  }
+
   const midi: WebMidi.MIDIAccess = await navigator.requestMIDIAccess();
 
   inputDevices = midi.inputs;
@@ -88,19 +169,12 @@ let requestMidiDevices = async (): Promise<void> => {
 
     inputDeviceNames.value.push(device.name ?? "Undefined name");
 
-    device.onmidimessage = (message) => {
-      deviceMessages.value.push({
-        data: message.data.toString(),
-        device: message.currentTarget.name,
-        timestamp: new Date(Date.now())
-      } as MidiMessage);
-    };
+    device.addEventListener("midimessage", processMidiMessage);
 
     if (permissionGranted) {
       sendNotification({
         title: "Input device found",
-        body:
-          device.name
+        body: device.name,
       });
     }
 
@@ -121,8 +195,7 @@ let requestMidiDevices = async (): Promise<void> => {
     if (permissionGranted) {
       sendNotification({
         title: "Output device found",
-        body:
-          device.name,
+        body: device.name,
       });
     }
 
